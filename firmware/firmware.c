@@ -12,10 +12,11 @@
 
 uint32_t CORE_ID;
 enum {
-    CORE_OS   =  0,
-    CORE_NES  =  1,
-    CORE_SNES =  2,
-    CORE_GB   =  3
+    CORE_OS         =  0,
+    CORE_NES        =  1,
+    CORE_SNES       =  2,
+    CORE_GB         =  3,
+    CORE_PACMAN     = 4
 }core_ids;
 
 #define OPTION_FILE "/snestang.ini"
@@ -1618,6 +1619,49 @@ int main_bare_os(){
         }
 }
 
+void load_pacman(){
+    status("Loading PacMan Arcade...");
+}
+
+int main_pacman(){
+    for (;;) {
+            // main menu
+            clear();
+            cursor(MENU_OPTIONS_OFFSET_COL1_X+1, (MENU_OPTIONS_OFFSET_Y-2));
+            switch(CORE_ID){
+                case CORE_PACMAN:
+                    print("### Welcome to PacManTang ###");
+                break;
+                default:
+                    print("ERR: undefined COREID");
+                break;
+            }
+
+            cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+MAIN_OPTIONS_LOAD_ROM));
+            print("1) Load ROM from SD card\n");
+            cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+MAIN_OPTIONS_LOAD_CORE));
+            print("2) Select core\n");
+            cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+4));
+            print("Version: ");
+            print(__DATE__);
+
+            delay(300);
+
+            int choice = 0;
+            for (;;) {
+                int r = joy_choice(12, (MAIN_OPTIONS_COUNT), &choice, OSD_KEY_CODE);
+                if (r == 1) break;
+            }
+
+            if (choice == MAIN_OPTIONS_LOAD_ROM) {
+                delay(300);
+                load_pacman();
+            } else if (choice == MAIN_OPTIONS_LOAD_CORE) {
+                menu_select_core(0);
+            }
+        }
+}
+
 int main() {
     CORE_ID = reg_core_id;
     overlay(1);
@@ -1658,28 +1702,33 @@ int main() {
 
     if(CORE_ID == CORE_OS)
         main_bare_os();
-    else{
+    else if(CORE_ID == CORE_PACMAN){
+        main_pacman();
+    }else{
         for (;;) {
             // main menu
             clear();
             cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y-2));
             //     01234567890123456789012345678901
             switch(CORE_ID){
-            case CORE_OS:
-                print("### Welcome to OSTang ###");
-            break;
-            case CORE_NES:
-                print("=== Welcome to NESTang ===");
+                case CORE_OS:
+                    print("### Welcome to OSTang ###");
                 break;
-            case CORE_SNES:
-                print("~~~ Welcome to SNESTang ~~~");
+                case CORE_NES:
+                    print("=== Welcome to NESTang ===");
+                    break;
+                case CORE_SNES:
+                    print("~~~ Welcome to SNESTang ~~~");
+                    break;
+                case CORE_GB:
+                    print("... Welcome to GBTang ...");
+                    break;
+                case CORE_PACMAN:
+                    print("ccc Welcome to PacManTang ccc");
                 break;
-            case CORE_GB:
-                print("... Welcome to GBTang ...");
-                break;
-            default:
-                print("ERR: undefined COREID");
-                break;
+                default:
+                    print("ERR: undefined COREID");
+                    break;
             }
 
 

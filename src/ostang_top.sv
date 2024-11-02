@@ -158,11 +158,11 @@ end
 `ifdef PRIMER
 // sysclk 50Mhz
 gowin_pll_27 pll_27 (.clkin(sys_clk), .clkout0(clk27));      // Primer25K: PLL to generate 27Mhz from 50Mhz
-gowin_pll_nes pll_nes (.clkin(sys_clk), .clkout0(clk), .clkout1(fclk), .clkout2(O_sdram_clk));
+gowin_pll_os pll_os (.clkin(sys_clk), .clkout0(clk), .clkout1(fclk), .clkout2(O_sdram_clk));
 `else
 // sys_clk 27Mhz
 assign clk27 = sys_clk;       // Nano20K: native 27Mhz system clock
-gowin_pll_nes pll_nes(.clkin(sys_clk), .clkoutd3(clk), .clkout(fclk), .clkoutp(O_sdram_clk));
+gowin_pll_os pll_os(.clkin(sys_clk), .clkoutd3(clk), .clkout(fclk), .clkoutp(O_sdram_clk));
 `endif  // PRIMER
 
 gowin_pll_hdmi pll_hdmi (

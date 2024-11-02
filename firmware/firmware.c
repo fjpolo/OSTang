@@ -1630,7 +1630,7 @@ int main_pacman(){
             cursor(MENU_OPTIONS_OFFSET_COL1_X+1, (MENU_OPTIONS_OFFSET_Y-2));
             switch(CORE_ID){
                 case CORE_PACMAN:
-                    print("### Welcome to PacManTang ###");
+                    print("ccc Welcome to PacManTang ccc");
                 break;
                 default:
                     print("ERR: undefined COREID");

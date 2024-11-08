@@ -1756,6 +1756,8 @@ int main() {
                 int rom;
                 delay(300);
                 menu_loadrom(&rom);
+                if(CORE_ID == CORE_NES)
+                    load_bsram_nes();
             } else if (choice == MAIN_OPTIONS_LOAD_CORE) {
                 menu_select_core(0);
             } else if (choice == MAIN_OPTIONS_OPTIONS) {

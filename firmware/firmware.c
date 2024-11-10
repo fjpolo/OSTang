@@ -1418,6 +1418,7 @@ int loadnes(int rom) {
         // memset(nes_bsram_starting_address, 0, 0x2000);
         // r = load_bsram_nes();
     }
+    load_bsram_nes();
     
     DEBUG("loadnes: %d bytes\r\n", total);
     status("Success");
@@ -1756,8 +1757,6 @@ int main() {
                 int rom;
                 delay(300);
                 menu_loadrom(&rom);
-                if(CORE_ID == CORE_NES)
-                    load_bsram_nes();
             } else if (choice == MAIN_OPTIONS_LOAD_CORE) {
                 menu_select_core(0);
             } else if (choice == MAIN_OPTIONS_OPTIONS) {

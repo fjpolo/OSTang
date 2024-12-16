@@ -921,8 +921,8 @@ int save_bsram_nes(void){
     FILINFO fno;
     int r = 0;
 
-    if (f_stat(snes_backup_path, &fno) != FR_OK) {
-        if (f_mkdir(snes_backup_path) != FR_OK) {
+    if (f_stat(nes_backup_save_str_bsram, &fno) != FR_OK) {
+        if (f_mkdir(nes_backup_save_str_bsram) != FR_OK) {
             status("Cannot create /saves");
             uart_printf("Cannot create /saves\r\n");
             return 1;
@@ -930,15 +930,18 @@ int save_bsram_nes(void){
     }
     if(nes_backup_name_bsram == ""){
         status("ERROR: invalid name!");
+        uart_printf("ERROR: invalid name!\r\n");
         return 1;
     }
     if(nes_backup_path_bsram == ""){
         status("ERROR: invalid path!");
+        uart_printf("ERROR: invalid path!\r\n");
         return 1;
     }
+    uart_printf("Save to: %s\r\n", "test");
     if (f_open(&f, nes_backup_path_bsram, (FA_WRITE | FA_CREATE_ALWAYS)) != FR_OK) {
         status("Cannot write save file");
-        uart_printf("Cannot write save file");
+        uart_printf("Cannot write save file\r\n");
         return 1;
     }
     unsigned int bw;
@@ -948,6 +951,16 @@ int save_bsram_nes(void){
         r = 2;
         return 1;
     }
+    int i;
+    uint32_t* aux_p = nes_bsram_starting_address;
+    uart_printf("save_bsram_nes()\r\n");
+    uart_printf("{\r\n");
+    for(i=0;i<(32);++i){
+        uart_printf("0x%x\r\n", aux_p[i]);
+    }
+    uart_printf("}\r\n");
+
+    uart_printf("BSRAM saved! | %dbytes\r\n", nes_bsram_size);
     status("BSRAM saved!");
 
 	f_close(&f);
@@ -961,21 +974,42 @@ int load_bsram_nes(void){
     FILINFO fno;
 
     reg_load_bsram = 1;
-    delay(250);
 
-    if (f_stat(nes_backup_path_bsram, &fno) != FR_OK) {
-        if (f_mkdir(nes_backup_path_bsram) != FR_OK) {
+    if (f_stat(nes_backup_save_str_bsram, &fno) != FR_OK) {
+        if (f_mkdir(nes_backup_save_str_bsram) != FR_OK) {
             status("Cannot create /saves");
+            uart_printf("Cannot create /saves\r\n");
             return 1;
         }
     }
-    uart_printf("Loading bsram from: %s\r\n", nes_backup_path_bsram);
+    if(nes_backup_name_bsram == ""){
+        status("ERROR: invalid name!");
+        uart_printf("ERROR: invalid name!\r\n");
+        return 1;
+    }
+    if(nes_backup_path_bsram == ""){
+        status("ERROR: invalid path!");
+        uart_printf("ERROR: invalid path!\r\n");
+        return 1;
+    }
+
     FIL f;
     if (f_open(&f, nes_backup_path_bsram, FA_READ) != FR_OK) {
         nes_backup_valid = true;
         status("Cannot open bsram file, assuming new");
+        uart_printf("Cannot open bsram file, assuming new\r\n");
         return 1;
     }
+    uart_printf("Loading from: %s\r\n", nes_backup_path_bsram);
+
+    int i;
+    uint32_t* aux_p = nes_bsram_starting_address;
+    uart_printf("load_bsram_nes()\r\n");
+    uart_printf("{\r\n");
+    for(i=0;i<(32);++i){
+        uart_printf("0x%x\r\n", aux_p[i]);
+    }
+    uart_printf("}\r\n");
 
     uint8_t *p = nes_bsram_starting_address;	
     unsigned int load = 0;
@@ -990,7 +1024,7 @@ int load_bsram_nes(void){
     nes_backup_valid = true;
     f_close(&f);
     int crc = gen_crc16(nes_bsram_starting_address, nes_bsram_size);
-    // uart_printf("Bsram backup loaded %d bytes CRC=%x.\n", load, crc);
+    uart_printf("Bsram backup loaded %d bytes CRC=%x.\r\n", load, crc);
     status("BSRAM loaded!");
 
     nes_bsram_crc16 = gen_crc16(nes_bsram_starting_address, nes_bsram_size);

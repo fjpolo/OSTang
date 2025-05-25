@@ -67,6 +67,7 @@ volatile uint8_t *NES_BSRAM = (volatile uint8_t *)0x00006000;       // WRAM orig
 
 // SDRAM
 volatile uint8_t *GB_ROM_SDRAM_START = (volatile uint8_t *)0x00000000;
+volatile uint8_t *GB_ROM_TITLE_SDRAM_START = (volatile uint8_t *)0x00000130;
 
 volatile uint8_t *nes_bsram_starting_address = (volatile uint8_t *)0x00066000;
 const uint32_t nes_bsram_size = (0x68000 - 0x66000);                              // WRAM is 2kB
@@ -1574,13 +1575,18 @@ int loadgb(int rom) {
     do {
         if ((r = f_read(&f, load_buf, 1024, &br)) != FR_OK)
             break;
+        if(total == 0){
+            for(i=0; i<1024; ++i){
+                DEBUG("%x ", load_buf[i]);
+            }
+        }
         total += br; // bytes
 
-        for (int i = 0; i < br; ++i) {
-            snes_data(load_buf[i]); // send actual ROM data byte by byte
+        for (int i = 0; i < br; i += 4) {
+            uint32_t *w = (uint32_t *)(load_buf + i);
+            snes_data(*w);				// send actual ROM data
         }
-
-        if ((total & 0xfff) == 0) { // display progress every 4KB
+        if ((total & 0xfff) == 0) {	// display progress every 4KB
             status("");
             printf("%d/%dK", total >> 10, size >> 10);
         }
@@ -1592,11 +1598,20 @@ int loadgb(int rom) {
         // r = load_sram_gb(); // Function to load GB SRAM
     }
 
-    // Verify ROM in SDRAM via UART
-    DEBUG("\n");
-    for(i=0; i<1024; ++i){
-            DEBUG("%d ", GB_ROM_SDRAM_START[i]);
-    }
+    // // This won't work cause RV does not have access to GB memory
+    // // Print Title via UART
+    // DEBUG("\n");
+    // for(i=0x0; i<0x1C; ++i){
+    //         DEBUG("%x ", GB_ROM_TITLE_SDRAM_START[i]);
+    // }
+    // DEBUG("\r\n");
+    // 
+    // // This won't work cause RV does not have access to GB memory
+    // // Verify ROM in SDRAM via UART
+    // DEBUG("\n");
+    // for(i=0x0; i<1024; ++i){
+    //         DEBUG("%x ", GB_ROM_SDRAM_START[i]);
+    // }
 
     DEBUG("loadgb: %d bytes\r\n", total);
     status("Success");

@@ -64,9 +64,9 @@ enum{
 // SNES BSRAM is mapped at address 7MB 
 volatile uint8_t *SNES_BSRAM = (volatile uint8_t *)0x07000000;
 volatile uint8_t *NES_BSRAM = (volatile uint8_t *)0x00006000;       // WRAM original
-
-volatile uint8_t *nes_bsram_starting_address = (volatile uint8_t *)0x00066000;
-const uint32_t nes_bsram_size = (0x68000 - 0x66000);                              // WRAM is 2kB
+// NES BSRAM is mapped at 7MB+24KB (0x706000) in RV address space
+volatile uint8_t *nes_bsram_starting_address = (volatile uint8_t *)0x00706000;
+const uint32_t nes_bsram_size = 0x2000;                              // WRAM is 8kB
 
 int option_osd_key;
 #define OSD_KEY_CODE (option_osd_key == OPTION_OSD_KEY_SELECT_START ? 0xC : (option_osd_key == OPTION_OSD_KEY_SELECT_RIGHT ? 0x84 : 0x24))
@@ -87,8 +87,7 @@ bool nes_backup_valid;		// whether it is okay to save
 bool snes_backup_valid;		// whether it is okay to save
 char snes_backup_name[256];
 char nes_backup_name_bsram[256] = "";
-char nes_backup_save_str_bsram[] = "saves/";
-char nes_backup_path_bsram[266] = "";
+char nes_backup_path_bsram[1024] = "";
 char snes_backup_path[266] = "saves/";
 uint16_t nes_bsram_crc16;
 uint16_t snes_bsram_crc16;
@@ -921,28 +920,19 @@ int save_bsram_nes(void){
     FILINFO fno;
     int r = 0;
 
-    if (f_stat(snes_backup_path, &fno) != FR_OK) {
-        if (f_mkdir(snes_backup_path) != FR_OK) {
-            status("Cannot create /saves");
-            uart_printf("Cannot create /saves\r\n");
-            return 1;
-        }
-    }
-    if(nes_backup_name_bsram == ""){
-        status("ERROR: invalid name!");
+    // Check if path is set
+    if(nes_backup_path_bsram[0] == '\0'){
+        status("ERROR: no save path!");
         return 1;
     }
-    if(nes_backup_path_bsram == ""){
-        status("ERROR: invalid path!");
-        return 1;
-    }
+    
     if (f_open(&f, nes_backup_path_bsram, (FA_WRITE | FA_CREATE_ALWAYS)) != FR_OK) {
         status("Cannot write save file");
-        uart_printf("Cannot write save file");
+        uart_printf("Cannot write save file: %s\r\n", nes_backup_path_bsram);
         return 1;
     }
     unsigned int bw;
-    if (f_write(&f, nes_bsram_starting_address, nes_bsram_size, &bw) != FR_OK || bw != nes_bsram_size) {
+    if (f_write(&f, (const void *)nes_bsram_starting_address, nes_bsram_size, &bw) != FR_OK || bw != nes_bsram_size) {
         status("ERROR: BSRAM not saved!");
         uart_printf("Write failure, bw=%d\r\n", bw);
         r = 2;
@@ -961,14 +951,14 @@ int load_bsram_nes(void){
     FILINFO fno;
 
     reg_load_bsram = 1;
-    delay(250);
+    // delay(250);
 
-    if (f_stat(nes_backup_path_bsram, &fno) != FR_OK) {
-        if (f_mkdir(nes_backup_path_bsram) != FR_OK) {
-            status("Cannot create /saves");
-            return 1;
-        }
-    }
+    // if (f_stat(nes_backup_path_bsram, &fno) != FR_OK) {
+    //     if (f_mkdir(nes_backup_path_bsram) != FR_OK) {
+    //         status("Cannot create /saves");
+    //         return 1;
+    //     }
+    // }
     uart_printf("Loading bsram from: %s\r\n", nes_backup_path_bsram);
     FIL f;
     if (f_open(&f, nes_backup_path_bsram, FA_READ) != FR_OK) {
@@ -977,23 +967,24 @@ int load_bsram_nes(void){
         return 1;
     }
 
-    uint8_t *p = nes_bsram_starting_address;	
+    uint8_t *p = (uint8_t *)nes_bsram_starting_address;	
     unsigned int load = 0;
     
     while (load < nes_bsram_size) {
         int br;
-        if (f_read(&f, p, 1024, &br) != FR_OK || br < 1024) 
+        if (f_read(&f, p, 1024, &br) != FR_OK)
             break;
+        if (br == 0) break;
         p += br;
         load += br;
     }
     nes_backup_valid = true;
     f_close(&f);
-    int crc = gen_crc16(nes_bsram_starting_address, nes_bsram_size);
+    int crc = gen_crc16((const uint8_t *)nes_bsram_starting_address, nes_bsram_size);
     // uart_printf("Bsram backup loaded %d bytes CRC=%x.\n", load, crc);
     status("BSRAM loaded!");
 
-    nes_bsram_crc16 = gen_crc16(nes_bsram_starting_address, nes_bsram_size);
+    nes_bsram_crc16 = gen_crc16((const uint8_t *)nes_bsram_starting_address, nes_bsram_size);
 
     delay(250);
     reg_load_bsram = 0;
@@ -1352,16 +1343,13 @@ int loadnes(int rom) {
     strncpy(load_fname, pwd, 1024);
     strncat(load_fname, "/", 1024);
     strncat(load_fname, file_names[rom], 1024);
-    int i=0;
-    for(int i=0; i<266; ++i)
-        nes_backup_path_bsram[i] = '\0';
-    i = 0;
-    while(file_names[rom][i] != '\0')
-        ++i;
-    memset(nes_backup_path_bsram, '\0', 266);
-    strncpy(nes_backup_name_bsram, file_names[rom], (i-4));
-    strcat(nes_backup_path_bsram, nes_backup_save_str_bsram);
-    strcat(nes_backup_path_bsram, nes_backup_name_bsram);
+    strncpy(nes_backup_path_bsram, load_fname, 1024);
+    char *dot = strrchr(nes_backup_path_bsram, '.');
+    if (dot) {
+        strcpy(dot, ".sav");
+    } else {
+        strcat(nes_backup_path_bsram, ".sav");
+    }
 
     DEBUG("loadnes start\r\n");
 

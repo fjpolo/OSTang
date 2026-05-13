@@ -47,6 +47,13 @@
 #define reg_timer0_load_value   (*(volatile uint32_t*)0x02000220)
 // Mode 7
 #define reg_mode7_enabled       (*(volatile uint32_t*)0x02000240)
+#define reg_m7_u0               (*(volatile uint32_t*)0x02000250)
+#define reg_m7_v0               (*(volatile uint32_t*)0x02000260)
+#define reg_m7_a                (*(volatile uint32_t*)0x02000270)
+#define reg_m7_b                (*(volatile uint32_t*)0x02000280)
+#define reg_m7_c                (*(volatile uint32_t*)0x02000290)
+#define reg_m7_d                (*(volatile uint32_t*)0x020002A0)
+#define reg_m7_tex_write        (*(volatile uint32_t*)0x020002B0)
 
 
 

@@ -26,6 +26,8 @@ enum {
 #define OPTION_OSD_KEY_SELECT_RIGHT 2
 #define OPTION_OSD_KEY_HOME         3
 
+#include <math.h>
+
 #define CHEATS_MAX_NUMBER 16
 
 #define MENU_OPTIONS_OFFSET_COL1_X      2
@@ -76,6 +78,7 @@ bool option_enhanced_apu;
 bool option_cheats_enabled;
 bool option_sys_type_is_pal;
 bool option_mode7_enabled;
+bool option_mode7_demo;
 
 bool flag_load_nes_bsram;
 
@@ -197,6 +200,11 @@ int load_option()  {
             uart_printf("option_mode7_enabled: %d\r\n", option_mode7_enabled);
             reg_mode7_enabled = (uint32_t)option_mode7_enabled;
             uart_printf("reg_mode7_enabled: %d\r\n", reg_mode7_enabled);
+        } else if (strcmp(key, "mode7_demo") == 0) {
+            if (strcasecmp(value, "true") == 0)
+                option_mode7_demo = true;
+            else
+                option_mode7_demo = false;
         } else {
             // just ignore unknown keys
         }
@@ -260,6 +268,11 @@ int save_option() {
 	}
     f_puts("mode7_enabled=", &f);
     if (option_mode7_enabled)
+        f_puts("true\n", &f);
+    else
+        f_puts("false\n", &f);
+    f_puts("mode7_demo=", &f);
+    if (option_mode7_demo)
         f_puts("true\n", &f);
     else
         f_puts("false\n", &f);
@@ -878,6 +891,7 @@ int menu_load_cheats(int *choice) {
 	}
 }
 
+
 void menu_cheats_options() {
 	int choice = 0;
 	int cheat_file;
@@ -958,7 +972,7 @@ int save_bsram_nes(void){
         return 1;
     }
     unsigned int bw;
-    if (f_write(&f, nes_bsram_starting_address, nes_bsram_size, &bw) != FR_OK || bw != nes_bsram_size) {
+    if (f_write(&f, (void*)nes_bsram_starting_address, nes_bsram_size, &bw) != FR_OK || bw != nes_bsram_size) {
         status("ERROR: BSRAM not saved!");
         uart_printf("Write failure, bw=%d\r\n", bw);
         r = 2;
@@ -993,7 +1007,7 @@ int load_bsram_nes(void){
         return 1;
     }
 
-    uint8_t *p = nes_bsram_starting_address;	
+    uint8_t *p = (uint8_t*)nes_bsram_starting_address;
     unsigned int load = 0;
     
     while (load < nes_bsram_size) {
@@ -1005,11 +1019,11 @@ int load_bsram_nes(void){
     }
     nes_backup_valid = true;
     f_close(&f);
-    int crc = gen_crc16(nes_bsram_starting_address, nes_bsram_size);
+    int crc = gen_crc16((uint8_t*)nes_bsram_starting_address, nes_bsram_size);
     // uart_printf("Bsram backup loaded %d bytes CRC=%x.\n", load, crc);
     status("BSRAM loaded!");
 
-    nes_bsram_crc16 = gen_crc16(nes_bsram_starting_address, nes_bsram_size);
+    nes_bsram_crc16 = gen_crc16((uint8_t*)nes_bsram_starting_address, nes_bsram_size);
 
     delay(250);
     reg_load_bsram = 0;
@@ -1085,11 +1099,19 @@ void menu_options_nes() {
             print("Enabled");
         else
             print("Disabled");
+        // Mode 7 Demo
+        cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_MODE7+1));
+        print("M7 Demo:");
+        cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_MODE7+1));
+        if (option_mode7_demo)
+            print("Enabled");
+        else
+            print("Disabled");
 
 		delay(300);
 
 		for (;;) {
-            int r = joy_choice(12, MENU_OPTIONS_COUNT, &choice, OSD_KEY_CODE);
+            int r = joy_choice(12, MENU_OPTIONS_COUNT + 1, &choice, OSD_KEY_CODE);
             if(r == 4) 
                 return;
 			if (r == 1) {
@@ -1131,6 +1153,8 @@ void menu_options_nes() {
                     } else if (choice == MENU_OPTIONS_MODE7) {
                         option_mode7_enabled = !option_mode7_enabled;
                         reg_mode7_enabled = (uint32_t)option_mode7_enabled;
+                    } else if (choice == MENU_OPTIONS_MODE7 + 1) {
+                        option_mode7_demo = !option_mode7_demo;
                     }
                     // 
 					if((choice != MENU_OPTIONS_CHEATS)&&(choice != MENU_OPTIONS_SAVE_BSRAM)&&(choice != MENU_OPTIONS_LOAD_BSRAM)){
@@ -1690,6 +1714,43 @@ int main_pacman(){
         }
 }
 
+uint32_t last_m7_time;
+void m7_demo_task() {
+    if (!option_mode7_demo) return;
+    
+    uint32_t t = reg_time;
+    if (t - last_m7_time < 20) return; // 50 fps
+    last_m7_time = t;
+
+    static int angle = 0;
+    angle = (angle + 1) % 360;
+
+    int s, c;
+    if (angle < 90) { c = 256 - angle * 2; s = angle * 2; }
+    else if (angle < 180) { int a = angle - 90; c = -a * 2; s = 256 - a * 2; }
+    else if (angle < 270) { int a = angle - 180; c = -256 + a * 2; s = -a * 2; }
+    else { int a = angle - 270; c = a * 2; s = -256 + a * 2; }
+
+    reg_m7_a = c;
+    reg_m7_b = -s;
+    reg_m7_c = s;
+    reg_m7_d = c;
+    
+    int x0 = 64 << 8;
+    int y0 = 64 << 8;
+    reg_m7_u0 = ((-c * 64) + (-(-s) * 64) + x0);
+    reg_m7_v0 = ((-s * 64) + (-c * 64) + y0);
+}
+
+void m7_init() {
+    for (int v = 0; v < 128; v++) {
+        for (int u = 0; u < 128; u++) {
+            int pixel = ((u >> 4) ^ (v >> 4)) & 3;
+            reg_m7_tex_write = ((v << 7 | u) << 2) | pixel;
+        }
+    }
+}
+
 int main() {
     CORE_ID = reg_core_id;
     overlay(1);
@@ -1723,10 +1784,9 @@ int main() {
     if (r == 2) {	// file corrupt
         clear();
         message("Option file corrupt and is not loaded",1);
-    } else if (r == 1) {	// file not exist
-        // clear();
-        // message("Cannot open option file",1);
     }
+
+    m7_init();
 
     if(CORE_ID == CORE_OS)
         main_bare_os();
@@ -1778,6 +1838,7 @@ int main() {
             for (;;) {
                 int r = joy_choice(12, MAIN_OPTIONS_COUNT, &choice, OSD_KEY_CODE);
                 if (r == 1) break;
+                m7_demo_task();
             }
 
             if (choice == MAIN_OPTIONS_LOAD_ROM) {

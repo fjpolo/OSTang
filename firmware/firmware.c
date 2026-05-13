@@ -79,6 +79,8 @@ bool option_cheats_enabled;
 bool option_sys_type_is_pal;
 bool option_mode7_enabled;
 bool option_mode7_demo;
+int option_m7_zoom_h = 256; // 1.0 zoom (8.8 fixed point)
+int option_m7_zoom_v = 256; // 1.0 zoom
 
 bool flag_load_nes_bsram;
 
@@ -1030,6 +1032,37 @@ int load_bsram_nes(void){
 	return 0;
 }
 
+void menu_mode7_options() {
+    int choice = 0;
+    while (1) {
+        clear();
+        cursor(8, 10);
+        print("--- Mode 7 Options ---");
+
+        cursor(MENU_OPTIONS_OFFSET_COL1_X, MENU_OPTIONS_OFFSET_Y);
+        print("<< Return");
+
+        cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+1));
+        print("Checkerboard:");
+        cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+1));
+        if (option_mode7_enabled) print("Enabled"); else print("Disabled");
+
+        for (;;) {
+            int r = joy_choice(12, 2, &choice, OSD_KEY_CODE);
+            if(r == 4) return;
+            if (r == 1) {
+                if (choice == 0) return;
+                if (choice == 1) {
+                    option_mode7_enabled = !option_mode7_enabled;
+                    reg_mode7_enabled = (uint32_t)option_mode7_enabled;
+                }
+                save_option();
+                break;
+            }
+        }
+    }
+}
+
 void menu_options_nes() {
 	int choice = 0;
 	while (1) {
@@ -1091,34 +1124,19 @@ void menu_options_nes() {
 			print("1:1");
 		else
 			print("8:7");
-        // Mode 7
+        // Mode 7 Settings
         cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_MODE7));
-        print("Mode 7:");
-        cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_MODE7));
-        if (option_mode7_enabled)
-            print("Enabled");
-        else
-            print("Disabled");
-        // Mode 7 Demo
-        cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_MODE7+1));
-        print("M7 Demo:");
-        cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_MODE7+1));
-        if (option_mode7_demo)
-            print("Enabled");
-        else
-            print("Disabled");
-
-		delay(300);
+        print("Mode 7 Settings...");
 
 		for (;;) {
-            int r = joy_choice(12, MENU_OPTIONS_COUNT + 1, &choice, OSD_KEY_CODE);
+            int r = joy_choice(12, MENU_OPTIONS_COUNT, &choice, OSD_KEY_CODE);
             if(r == 4) 
                 return;
 			if (r == 1) {
 				if (choice == MENU_OPTIONS_RETURN) {
 					return;
-				} else if (choice == MENU_OPTIONS_NOTHING) {
-					// nothing
+				} else if (choice == MENU_OPTIONS_MODE7) {
+                    menu_mode7_options();
 				} else {
 					if (choice == MENU_OPTIONS_OSD_HOT_KEY) {
 						if (option_osd_key == OPTION_OSD_KEY_SELECT_START)
@@ -1133,43 +1151,23 @@ void menu_options_nes() {
 						option_enhanced_apu = !option_enhanced_apu;
 						reg_enhanced_apu = !reg_enhanced_apu;
 					} else if (choice == MENU_OPTIONS_CHEATS) {
-						delay(300);
 						menu_cheats_options();
-						//continue;
 					} else if (choice == MENU_OPTIONS_SAVE_BSRAM) {
-						delay(300);
 						save_bsram_nes();
-						//continue;
-					}else if (choice  == MENU_OPTIONS_LOAD_BSRAM) {
-						delay(300);
+					} else if (choice  == MENU_OPTIONS_LOAD_BSRAM) {
 						load_bsram_nes();
-						//continue;
 					} else if (choice == MENU_OPTIONS_SYSTEM) {
 						option_sys_type_is_pal = !option_sys_type_is_pal;
                         reg_sys_type = (uint32_t)option_sys_type_is_pal;
                     } else if (choice == MENU_OPTIONS_ASPECT) {
-						option_aspect_ratio = !option_aspect_ratio;
+                        option_aspect_ratio = !option_aspect_ratio;
                         reg_aspect_ratio = (uint32_t)option_aspect_ratio;
-                    } else if (choice == MENU_OPTIONS_MODE7) {
-                        option_mode7_enabled = !option_mode7_enabled;
-                        reg_mode7_enabled = (uint32_t)option_mode7_enabled;
-                    } else if (choice == MENU_OPTIONS_MODE7 + 1) {
-                        option_mode7_demo = !option_mode7_demo;
-                        if (option_mode7_demo) {
-                            option_mode7_enabled = true;
-                            reg_mode7_enabled = 1;
-                        }
                     }
-                    // 
-					if((choice != MENU_OPTIONS_CHEATS)&&(choice != MENU_OPTIONS_SAVE_BSRAM)&&(choice != MENU_OPTIONS_LOAD_BSRAM)){
-						status("Saving options...");
-					    if (save_option()) {
-						    message("Cannot save options to SD",1);
-						    break;
-                        }
-					}
-					break;	// redraw UI
 				}
+                if((choice != MENU_OPTIONS_CHEATS)&&(choice != MENU_OPTIONS_SAVE_BSRAM)&&(choice != MENU_OPTIONS_LOAD_BSRAM)){
+                    save_option();
+                }
+				break;
 			}
 		}
 	}

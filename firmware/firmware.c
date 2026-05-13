@@ -43,6 +43,7 @@ enum {
     MENU_OPTIONS_LOAD_BSRAM,
     MENU_OPTIONS_SYSTEM,
     MENU_OPTIONS_ASPECT,
+    MENU_OPTIONS_MODE7,
     MENU_OPTIONS_COUNT
 }menu_options_values;
 
@@ -74,6 +75,7 @@ bool option_backup_bsram;
 bool option_enhanced_apu;
 bool option_cheats_enabled;
 bool option_sys_type_is_pal;
+bool option_mode7_enabled;
 
 bool flag_load_nes_bsram;
 
@@ -186,6 +188,15 @@ int load_option()  {
             uart_printf("option_aspect_ratio: %d\r\n", option_aspect_ratio);
             reg_aspect_ratio = option_aspect_ratio;
             uart_printf("reg_aspect_ratio: %d\r\n", reg_aspect_ratio);
+        } else if (strcmp(key, "mode7_enabled") == 0) {
+            uart_printf("mode7_enabled: %s\r\n", value);
+            if (strcasecmp(value, "true") == 0)
+                option_mode7_enabled = true;
+            else
+                option_mode7_enabled = false;
+            uart_printf("option_mode7_enabled: %d\r\n", option_mode7_enabled);
+            reg_mode7_enabled = (uint32_t)option_mode7_enabled;
+            uart_printf("reg_mode7_enabled: %d\r\n", reg_mode7_enabled);
         } else {
             // just ignore unknown keys
         }
@@ -247,6 +258,11 @@ int save_option() {
     else{
 		f_puts("0\n", &f);
 	}
+    f_puts("mode7_enabled=", &f);
+    if (option_mode7_enabled)
+        f_puts("true\n", &f);
+    else
+        f_puts("false\n", &f);
 		
 save_options_close:
     f_close(&f);
@@ -1061,11 +1077,19 @@ void menu_options_nes() {
 			print("1:1");
 		else
 			print("8:7");
+        // Mode 7
+        cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_MODE7));
+        print("Mode 7:");
+        cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_MODE7));
+        if (option_mode7_enabled)
+            print("Enabled");
+        else
+            print("Disabled");
 
 		delay(300);
 
 		for (;;) {
-            int r = joy_choice(12, 10, &choice, OSD_KEY_CODE);
+            int r = joy_choice(12, MENU_OPTIONS_COUNT, &choice, OSD_KEY_CODE);
             if(r == 4) 
                 return;
 			if (r == 1) {
@@ -1104,6 +1128,9 @@ void menu_options_nes() {
                     } else if (choice == MENU_OPTIONS_ASPECT) {
 						option_aspect_ratio = !option_aspect_ratio;
                         reg_aspect_ratio = (uint32_t)option_aspect_ratio;
+                    } else if (choice == MENU_OPTIONS_MODE7) {
+                        option_mode7_enabled = !option_mode7_enabled;
+                        reg_mode7_enabled = (uint32_t)option_mode7_enabled;
                     }
                     // 
 					if((choice != MENU_OPTIONS_CHEATS)&&(choice != MENU_OPTIONS_SAVE_BSRAM)&&(choice != MENU_OPTIONS_LOAD_BSRAM)){

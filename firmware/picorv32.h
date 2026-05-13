@@ -45,6 +45,8 @@
 #define reg_timer_interrupts    (*(volatile uint32_t*)0x02000200)
 // Timer0 Load Register
 #define reg_timer0_load_value   (*(volatile uint32_t*)0x02000220)
+// Mode 7
+#define reg_mode7_enabled       (*(volatile uint32_t*)0x02000240)
 
 
 

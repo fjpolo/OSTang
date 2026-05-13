@@ -1043,19 +1043,27 @@ void menu_mode7_options() {
         print("<< Return");
 
         cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+1));
-        print("Checkerboard:");
+        print("X-Flip:");
         cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+1));
-        if (option_mode7_enabled) print("Enabled"); else print("Disabled");
+        if (option_mode7_enabled & 0x01) print("Enabled"); else print("Disabled");
+
+        cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+2));
+        print("Y-Flip:");
+        cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+2));
+        if (option_mode7_enabled & 0x02) print("Enabled"); else print("Disabled");
 
         for (;;) {
-            int r = joy_choice(12, 2, &choice, OSD_KEY_CODE);
+            int r = joy_choice(12, 3, &choice, OSD_KEY_CODE);
             if(r == 4) return;
             if (r == 1) {
                 if (choice == 0) return;
                 if (choice == 1) {
-                    option_mode7_enabled = !option_mode7_enabled;
-                    reg_mode7_enabled = (uint32_t)option_mode7_enabled;
+                    option_mode7_enabled ^= 0x01; // Toggle X
                 }
+                if (choice == 2) {
+                    option_mode7_enabled ^= 0x02; // Toggle Y
+                }
+                reg_mode7_enabled = (uint32_t)option_mode7_enabled;
                 save_option();
                 break;
             }

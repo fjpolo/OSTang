@@ -1720,11 +1720,28 @@ int main_pacman(){
 
 uint32_t last_m7_time;
 void m7_demo_task() {
-    if (!option_mode7_demo) return;
+    static bool last_demo_on = false;
+    if (!option_mode7_demo) {
+        if (last_demo_on) {
+            reg_mode7_enabled = (uint32_t)option_mode7_enabled;
+        }
+        last_demo_on = false;
+        return;
+    }
+    last_demo_on = true;
     
     uint32_t t = reg_time;
     if (t - last_m7_time < 20) return; // 50 fps
     last_m7_time = t;
+
+    static uint32_t last_toggle_time = 0;
+    static bool demo_m7_state = true;
+    
+    if (t - last_toggle_time > 3000) { // Toggle every 3 seconds
+        last_toggle_time = t;
+        demo_m7_state = !demo_m7_state;
+        reg_mode7_enabled = (uint32_t)demo_m7_state;
+    }
 
     static int angle = 0;
     angle = (angle + 1) % 360;

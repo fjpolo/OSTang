@@ -1155,6 +1155,10 @@ void menu_options_nes() {
                         reg_mode7_enabled = (uint32_t)option_mode7_enabled;
                     } else if (choice == MENU_OPTIONS_MODE7 + 1) {
                         option_mode7_demo = !option_mode7_demo;
+                        if (option_mode7_demo) {
+                            option_mode7_enabled = true;
+                            reg_mode7_enabled = 1;
+                        }
                     }
                     // 
 					if((choice != MENU_OPTIONS_CHEATS)&&(choice != MENU_OPTIONS_SAVE_BSRAM)&&(choice != MENU_OPTIONS_LOAD_BSRAM)){

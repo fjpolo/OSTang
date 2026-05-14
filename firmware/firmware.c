@@ -77,7 +77,7 @@ bool option_backup_bsram;
 bool option_enhanced_apu;
 bool option_cheats_enabled;
 bool option_sys_type_is_pal;
-bool option_mode7_enabled;
+int option_mode7_enabled;
 bool option_mode7_demo;
 int option_m7_zoom_h = 256; // 1.0 zoom (8.8 fixed point)
 int option_m7_zoom_v = 256; // 1.0 zoom
@@ -196,9 +196,11 @@ int load_option()  {
         } else if (strcmp(key, "mode7_enabled") == 0) {
             uart_printf("mode7_enabled: %s\r\n", value);
             if (strcasecmp(value, "true") == 0)
-                option_mode7_enabled = true;
+                option_mode7_enabled = 1;
+            else if (strcasecmp(value, "false") == 0)
+                option_mode7_enabled = 0;
             else
-                option_mode7_enabled = false;
+                option_mode7_enabled = atoi(value);
             uart_printf("option_mode7_enabled: %d\r\n", option_mode7_enabled);
             reg_mode7_enabled = (uint32_t)option_mode7_enabled;
             uart_printf("reg_mode7_enabled: %d\r\n", reg_mode7_enabled);
@@ -269,10 +271,19 @@ int save_option() {
 		f_puts("0\n", &f);
 	}
     f_puts("mode7_enabled=", &f);
-    if (option_mode7_enabled)
-        f_puts("true\n", &f);
-    else
-        f_puts("false\n", &f);
+    char m7_val[4];
+    int v = option_mode7_enabled;
+    if (v >= 10) {
+        m7_val[0] = '1';
+        m7_val[1] = (v - 10) + '0';
+        m7_val[2] = '\n';
+        m7_val[3] = '\0';
+    } else {
+        m7_val[0] = v + '0';
+        m7_val[1] = '\n';
+        m7_val[2] = '\0';
+    }
+    f_puts(m7_val, &f);
     f_puts("mode7_demo=", &f);
     if (option_mode7_demo)
         f_puts("true\n", &f);
@@ -1043,25 +1054,32 @@ void menu_mode7_options() {
         print("<< Return");
 
         cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+1));
-        print("X-Flip:");
+        print("Tile X-Flip:");
         cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+1));
         if (option_mode7_enabled & 0x01) print("Enabled"); else print("Disabled");
 
         cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+2));
-        print("Y-Flip:");
+        print("Tile Y-Flip:");
         cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+2));
         if (option_mode7_enabled & 0x02) print("Enabled"); else print("Disabled");
 
+        cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+3));
+        print("Screen X-Flip:");
+        cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+3));
+        if (option_mode7_enabled & 0x04) print("Enabled"); else print("Disabled");
+
+        cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+4));
+        print("Screen Y-Flip:");
+        cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+4));
+        if (option_mode7_enabled & 0x08) print("Enabled"); else print("Disabled");
+
         for (;;) {
-            int r = joy_choice(12, 3, &choice, OSD_KEY_CODE);
+            int r = joy_choice(12, 5, &choice, OSD_KEY_CODE);
             if(r == 4) return;
             if (r == 1) {
                 if (choice == 0) return;
-                if (choice == 1) {
-                    option_mode7_enabled ^= 0x01; // Toggle X
-                }
-                if (choice == 2) {
-                    option_mode7_enabled ^= 0x02; // Toggle Y
+                if (choice >= 1 && choice <= 4) {
+                    option_mode7_enabled ^= (1 << (choice - 1));
                 }
                 reg_mode7_enabled = (uint32_t)option_mode7_enabled;
                 save_option();

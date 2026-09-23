@@ -64,13 +64,9 @@ enum{
 // SNES BSRAM is mapped at address 7MB 
 volatile uint8_t *SNES_BSRAM = (volatile uint8_t *)0x07000000;
 volatile uint8_t *NES_BSRAM = (volatile uint8_t *)0x00006000;       // WRAM original
-
-// SDRAM
-volatile uint8_t *GB_ROM_SDRAM_START = (volatile uint8_t *)0x00000000;
-volatile uint8_t *GB_ROM_TITLE_SDRAM_START = (volatile uint8_t *)0x00000130;
-
-volatile uint8_t *nes_bsram_starting_address = (volatile uint8_t *)0x00066000;
-const uint32_t nes_bsram_size = (0x68000 - 0x66000);                              // WRAM is 2kB
+// NES BSRAM is mapped at 7MB+24KB (0x706000) in RV address space
+volatile uint8_t *nes_bsram_starting_address = (volatile uint8_t *)0x00706000;
+const uint32_t nes_bsram_size = 0x2000;                              // WRAM is 8kB
 
 int option_osd_key;
 #define OSD_KEY_CODE (option_osd_key == OPTION_OSD_KEY_SELECT_START ? 0xC : (option_osd_key == OPTION_OSD_KEY_SELECT_RIGHT ? 0x84 : 0x24))
@@ -91,25 +87,11 @@ bool nes_backup_valid;		// whether it is okay to save
 bool snes_backup_valid;		// whether it is okay to save
 char snes_backup_name[256];
 char nes_backup_name_bsram[256] = "";
-char nes_backup_save_str_bsram[] = "saves/";
-char nes_backup_path_bsram[266] = "";
+char nes_backup_path_bsram[1024] = "";
 char snes_backup_path[266] = "saves/";
 uint16_t nes_bsram_crc16;
 uint16_t snes_bsram_crc16;
 uint32_t snes_backup_time;
-
-bool gb_running;
-int gb_ramsize;
-bool gb_backup_valid;		// whether it is okay to save
-bool gb_backup_valid;		// whether it is okay to save
-char gb_backup_name[256];
-char gb_backup_name_bsram[256] = "";
-char gb_backup_save_str_bsram[] = "saves/";
-char gb_backup_path_bsram[266] = "";
-char gb_backup_path[266] = "saves/";
-uint16_t gb_bsram_crc16;
-uint16_t gb_bsram_crc16;
-uint32_t gb_backup_time;
 
 char load_fname[1024];
 char load_buf[1024];
@@ -212,6 +194,7 @@ load_option_close:
     f_close(&f);
     return r;
 }
+
 
 // return 0: success, 1: cannot save
 int save_option() {
@@ -344,6 +327,7 @@ void message(char *msg, int center) {
     delay(300);
 }
 
+
 FATFS fs;
 
 #define PAGESIZE 22
@@ -468,14 +452,12 @@ int menu_loadrom(int *choice) {
                         // actually load a ROM
                         *choice = active;
                         int res;
-                        if (CORE_ID == 1)
+                        if (CORE_ID == CORE_NES)
                             res = loadnes(active);
-                        else if(CORE_ID == 2)
-                            res = loadsnes(active);
-                        else if(CORE_ID == 3)
+                        else if (CORE_ID == CORE_GB)
                             res = loadgb(active);
                         else
-                            message("Invalid CORE_ID!", 1);
+                            res = loadsnes(active);
                         if (res != 0) {
                             message("Cannot load rom",1);
                             break;
@@ -940,28 +922,19 @@ int save_bsram_nes(void){
     FILINFO fno;
     int r = 0;
 
-    if (f_stat(snes_backup_path, &fno) != FR_OK) {
-        if (f_mkdir(snes_backup_path) != FR_OK) {
-            status("Cannot create /saves");
-            uart_printf("Cannot create /saves\r\n");
-            return 1;
-        }
-    }
-    if(nes_backup_name_bsram == ""){
-        status("ERROR: invalid name!");
+    // Check if path is set
+    if(nes_backup_path_bsram[0] == '\0'){
+        status("ERROR: no save path!");
         return 1;
     }
-    if(nes_backup_path_bsram == ""){
-        status("ERROR: invalid path!");
-        return 1;
-    }
+    
     if (f_open(&f, nes_backup_path_bsram, (FA_WRITE | FA_CREATE_ALWAYS)) != FR_OK) {
         status("Cannot write save file");
-        uart_printf("Cannot write save file");
+        uart_printf("Cannot write save file: %s\r\n", nes_backup_path_bsram);
         return 1;
     }
     unsigned int bw;
-    if (f_write(&f, nes_bsram_starting_address, nes_bsram_size, &bw) != FR_OK || bw != nes_bsram_size) {
+    if (f_write(&f, (const void *)nes_bsram_starting_address, nes_bsram_size, &bw) != FR_OK || bw != nes_bsram_size) {
         status("ERROR: BSRAM not saved!");
         uart_printf("Write failure, bw=%d\r\n", bw);
         r = 2;
@@ -980,14 +953,14 @@ int load_bsram_nes(void){
     FILINFO fno;
 
     reg_load_bsram = 1;
-    delay(250);
+    // delay(250);
 
-    if (f_stat(nes_backup_path_bsram, &fno) != FR_OK) {
-        if (f_mkdir(nes_backup_path_bsram) != FR_OK) {
-            status("Cannot create /saves");
-            return 1;
-        }
-    }
+    // if (f_stat(nes_backup_path_bsram, &fno) != FR_OK) {
+    //     if (f_mkdir(nes_backup_path_bsram) != FR_OK) {
+    //         status("Cannot create /saves");
+    //         return 1;
+    //     }
+    // }
     uart_printf("Loading bsram from: %s\r\n", nes_backup_path_bsram);
     FIL f;
     if (f_open(&f, nes_backup_path_bsram, FA_READ) != FR_OK) {
@@ -996,23 +969,24 @@ int load_bsram_nes(void){
         return 1;
     }
 
-    volatile uint8_t *p = nes_bsram_starting_address;	
+    uint8_t *p = (uint8_t *)nes_bsram_starting_address;	
     unsigned int load = 0;
     
     while (load < nes_bsram_size) {
         int br;
-        if (f_read(&f, p, 1024, &br) != FR_OK || br < 1024) 
+        if (f_read(&f, p, 1024, &br) != FR_OK)
             break;
+        if (br == 0) break;
         p += br;
         load += br;
     }
     nes_backup_valid = true;
     f_close(&f);
-    int crc = gen_crc16(nes_bsram_starting_address, nes_bsram_size);
+    int crc = gen_crc16((const uint8_t *)nes_bsram_starting_address, nes_bsram_size);
     // uart_printf("Bsram backup loaded %d bytes CRC=%x.\n", load, crc);
     status("BSRAM loaded!");
 
-    nes_bsram_crc16 = gen_crc16(nes_bsram_starting_address, nes_bsram_size);
+    nes_bsram_crc16 = gen_crc16((const uint8_t *)nes_bsram_starting_address, nes_bsram_size);
 
     delay(250);
     reg_load_bsram = 0;
@@ -1132,71 +1106,6 @@ void menu_options_nes() {
 						    break;
                         }
 					}
-					break;	// redraw UI
-				}
-			}
-		}
-	}
-}
-
-void menu_options_gb() {
-	int choice = 0;
-	while (1) {
-		clear();
-		cursor(8, 10);
-		print("--- Options ---");
-
-        // Return to main menu
-		cursor(MENU_OPTIONS_OFFSET_COL1_X, MENU_OPTIONS_OFFSET_Y);
-		print("<< Return to main menu");
-        // OSD hot key
-		cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_OSD_HOT_KEY));
-		print("OSD hot key:");
-		cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_OSD_HOT_KEY));
-		if (option_osd_key == OPTION_OSD_KEY_SELECT_START)
-			print("SELECT&START");
-		else if(option_osd_key == OPTION_OSD_KEY_SELECT_RIGHT)
-			print("SELECT&RIGHT");
-		else
-			print("HOME");
-		// Backup BSRAM
-        cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_BACKUP_BSRAM));
-		print("Backup BSRAM:");
-		cursor(MENU_OPTIONS_OFFSET_COL2_X, (MENU_OPTIONS_OFFSET_Y+MENU_OPTIONS_BACKUP_BSRAM));
-		if (option_backup_bsram)
-			print("Yes");
-		else
-			print("No");
-
-		delay(300);
-
-		for (;;) {
-            int r = joy_choice(12, 4, &choice, OSD_KEY_CODE);
-            if(r == 4) 
-                return;
-			if (r == 1) {
-				if (choice == MENU_OPTIONS_RETURN) {
-					return;
-				} else if (choice == MENU_OPTIONS_NOTHING) {
-					// nothing
-				} else {
-					if (choice == MENU_OPTIONS_OSD_HOT_KEY) {
-						if (option_osd_key == OPTION_OSD_KEY_SELECT_START)
-							option_osd_key = OPTION_OSD_KEY_SELECT_RIGHT;
-						else if (option_osd_key == OPTION_OSD_KEY_SELECT_RIGHT)
-							option_osd_key = OPTION_OSD_KEY_HOME;
-						else
-							option_osd_key = OPTION_OSD_KEY_SELECT_START;
-					} else if (choice == MENU_OPTIONS_BACKUP_BSRAM) {
-						option_backup_bsram = !option_backup_bsram;
-					} 
-                    // 
-                    status("Saving options...");
-                    if (save_option()) {
-                        message("Cannot save options to SD",1);
-                        break;
-                    }
-
 					break;	// redraw UI
 				}
 			}
@@ -1324,6 +1233,66 @@ int parse_snes_header(FIL *fp, int pos, int file_size, int typ, char *hdr,
 
 // actually load a rom file. if bsram backup is needed, also loads the backup.
 // return 0 if successful
+// Load a Game Boy ROM file (.gb or .gbc).
+// GB ROMs are flat binary images with no special header processing.
+// return 0 if successful
+int loadgb(int rom) {
+    FIL f;
+    int r = 1;
+    strncpy(load_fname, pwd, 1024);
+    strncat(load_fname, "/", 1024);
+    strncat(load_fname, file_names[rom], 1024);
+
+    // Accept .gb and .gbc extensions
+    char *p = strcasestr(file_names[rom], ".gb");
+    if (p == NULL)
+        p = strcasestr(file_names[rom], ".gbc");
+    if (p == NULL) {
+        status("Only .gb or .gbc supported");
+        goto loadgb_end;
+    }
+
+    if (sd_init() != 0) return 99;
+
+    r = f_open(&f, load_fname, FA_READ);
+    if (r) {
+        status("Cannot open file");
+        goto loadgb_end;
+    }
+
+    unsigned int br, total = 0;
+    int size = file_sizes[rom];
+
+    // Enable game loading (resets core, starts SDRAM write)
+    snes_ctrl(1);
+
+    // Stream raw ROM bytes to SDRAM
+    do {
+        if ((r = f_read(&f, load_buf, 1024, &br)) != FR_OK)
+            break;
+        for (int i = 0; i < br; i += 4) {
+            uint32_t *w = (uint32_t *)(load_buf + i);
+            snes_data(*w);
+        }
+        total += br;
+        if ((total & 0x3fff) == 0) {  // progress every 16KB
+            status("");
+            printf("%d/%dK", total >> 10, size >> 10);
+        }
+    } while (br == 1024);
+
+    DEBUG("loadgb: %d bytes\r\n", total);
+    status("Success");
+
+    f_close(&f);
+    snes_ctrl(0);   // start core
+    overlay(0);     // hide OSD
+    return 0;
+
+loadgb_end:
+    return r;
+}
+
 int loadsnes(int rom) {
     FIL f;
     int r=1;
@@ -1436,16 +1405,13 @@ int loadnes(int rom) {
     strncpy(load_fname, pwd, 1024);
     strncat(load_fname, "/", 1024);
     strncat(load_fname, file_names[rom], 1024);
-    int i=0;
-    for(int i=0; i<266; ++i)
-        nes_backup_path_bsram[i] = '\0';
-    i = 0;
-    while(file_names[rom][i] != '\0')
-        ++i;
-    memset(nes_backup_path_bsram, '\0', 266);
-    strncpy(nes_backup_name_bsram, file_names[rom], (i-4));
-    strcat(nes_backup_path_bsram, nes_backup_save_str_bsram);
-    strcat(nes_backup_path_bsram, nes_backup_name_bsram);
+    strncpy(nes_backup_path_bsram, load_fname, 1024);
+    char *dot = strrchr(nes_backup_path_bsram, '.');
+    if (dot) {
+        strcpy(dot, ".sav");
+    } else {
+        strcat(nes_backup_path_bsram, ".sav");
+    }
 
     DEBUG("loadnes start\r\n");
 
@@ -1513,115 +1479,6 @@ loadnes_nes_end:
 loadnes_end:
     overlay(0);		// turn off OSD
 	return r;
-}
-
-// load a GameBoy ROM file.
-// return 0 if successful
-char gb_backup_path_sram[266];
-char gb_backup_name_sram[256]; // Adjust size as needed
-char gb_backup_save_str_sram[256]; // Adjust size as needed
-bool option_backup_sram = false;
-int loadgb(int rom) {
-    FIL f;
-    int r = 1;
-    strncpy(load_fname, pwd, 1024);
-    strncat(load_fname, "/", 1024);
-    strncat(load_fname, file_names[rom], 1024);
-
-    int i = 0;
-    for (int i = 0; i < 266; ++i)
-        gb_backup_path_sram[i] = '\0'; // Assuming you have a similar backup path for GB SRAM
-    i = 0;
-    while (file_names[rom][i] != '\0')
-        ++i;
-    memset(gb_backup_path_sram, '\0', 266);
-    strncpy(gb_backup_name_sram, file_names[rom], (i - 4)); // Assuming .gb or similar
-    strcat(gb_backup_path_sram, gb_backup_save_str_sram);   // Assuming you have a similar save path
-    strcat(gb_backup_path_sram, gb_backup_name_sram);
-
-    DEBUG("loadgb start\r\n");
-
-    // check extension .gb, .gbc, or similar
-    char *p = strcasestr(file_names[rom], ".gb");
-    if (p == NULL) {
-        p = strcasestr(file_names[rom], ".gbc");
-        if (p == NULL) {
-            status("Only .gb or .gbc supported");
-            goto loadgb_end;
-        }
-    }
-
-    // initialize sd again to be sure
-    if (sd_init() != 0) return 99;
-
-    r = f_open(&f, load_fname, FA_READ);
-    if (r) {
-        status("Cannot open file");
-        goto loadgb_end;
-    }
-    unsigned int off = 0, br, total = 0;
-    unsigned int size = file_sizes[rom];
-
-    // load actual ROM
-    snes_ctrl(1); // enable game loading, this resets GameBoy
-    gb_running = false;
-
-    // Send rom content to GameBoy
-    if ((r = f_lseek(&f, off)) != FR_OK) {
-        status("Seek failure");
-        goto loadgb_gb_end;
-    }
-
-    do {
-        if ((r = f_read(&f, load_buf, 1024, &br)) != FR_OK)
-            break;
-        if(total == 0){
-            for(i=0; i<1024; ++i){
-                DEBUG("%x ", load_buf[i]);
-            }
-        }
-        total += br; // bytes
-
-        for (int i = 0; i < br; i += 4) {
-            uint32_t *w = (uint32_t *)(load_buf + i);
-            snes_data(*w);				// send actual ROM data
-        }
-        if ((total & 0xfff) == 0) {	// display progress every 4KB
-            status("");
-            printf("%d/%dK", total >> 10, size >> 10);
-        }
-    } while (br == 1024);
-    f_close(&f);
-
-    // Load SRAM
-    if (option_backup_sram) { // Assuming you have an option to load SRAM
-        // r = load_sram_gb(); // Function to load GB SRAM
-    }
-
-    // // This won't work cause RV does not have access to GB memory
-    // // Print Title via UART
-    // DEBUG("\n");
-    // for(i=0x0; i<0x1C; ++i){
-    //         DEBUG("%x ", GB_ROM_TITLE_SDRAM_START[i]);
-    // }
-    // DEBUG("\r\n");
-    // 
-    // // This won't work cause RV does not have access to GB memory
-    // // Verify ROM in SDRAM via UART
-    // DEBUG("\n");
-    // for(i=0x0; i<1024; ++i){
-    //         DEBUG("%x ", GB_ROM_SDRAM_START[i]);
-    // }
-
-    DEBUG("loadgb: %d bytes\r\n", total);
-    status("Success");
-    gb_running = true;
-
-loadgb_gb_end:
-    snes_ctrl(0); // turn off game loading, this starts the core
-loadgb_end:
-    overlay(0); // turn off OSD
-    return r;
 }
 
 void backup_load(char *name, int size) {
@@ -1813,49 +1670,6 @@ int main_bare_os(){
         }
 }
 
-void load_gb(){
-    status("Loading PacMan Arcade...");
-}
-
-int main_gb(){
-    for (;;) {
-            // main menu
-            clear();
-            cursor(MENU_OPTIONS_OFFSET_COL1_X+1, (MENU_OPTIONS_OFFSET_Y-2));
-            switch(CORE_ID){
-                case CORE_PACMAN:
-                print("... Welcome to GBTang ...");
-                break;
-                default:
-                    print("ERR: undefined COREID");
-                break;
-            }
-
-            cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+MAIN_OPTIONS_LOAD_ROM));
-            print("1) Load ROM from SD card\n");
-            cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+MAIN_OPTIONS_LOAD_CORE));
-            print("2) Select core\n");
-            cursor(MENU_OPTIONS_OFFSET_COL1_X, (MENU_OPTIONS_OFFSET_Y+4));
-            print("Version: ");
-            print(__DATE__);
-
-            delay(300);
-
-            int choice = 0;
-            for (;;) {
-                int r = joy_choice(12, (MAIN_OPTIONS_COUNT), &choice, OSD_KEY_CODE);
-                if (r == 1) break;
-            }
-
-            if (choice == MAIN_OPTIONS_LOAD_ROM) {
-                delay(300);
-                load_gb();
-            } else if (choice == MAIN_OPTIONS_LOAD_CORE) {
-                menu_select_core(0);
-            }
-        }
-}
-
 void load_pacman(){
     status("Loading PacMan Arcade...");
 }
@@ -1939,9 +1753,9 @@ int main() {
 
     if(CORE_ID == CORE_OS)
         main_bare_os();
-    else if(CORE_ID == CORE_PACMAN)
+    else if(CORE_ID == CORE_PACMAN){
         main_pacman();
-    else{
+    }else{
         for (;;) {
             // main menu
             clear();
@@ -1954,12 +1768,15 @@ int main() {
                 case CORE_NES:
                     print("=== Welcome to NESTang ===");
                     break;
-                case CORE_GB:
-                    print("*** Welcome to GBTang ***");
-                    break;
                 case CORE_SNES:
                     print("~~~ Welcome to SNESTang ~~~");
                     break;
+                case CORE_GB:
+                    print("... Welcome to GBTang ...");
+                    break;
+                case CORE_PACMAN:
+                    print("ccc Welcome to PacManTang ccc");
+                break;
                 default:
                     print("ERR: undefined COREID");
                     break;
@@ -2000,9 +1817,6 @@ int main() {
                     break;
                     case CORE_SNES:
                         menu_options();
-                    break;
-                    case CORE_GB:
-                        menu_options_gb();
                     break;
                     default:
                         menu_options();

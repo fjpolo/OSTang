@@ -4,7 +4,13 @@
 # It is to be loaded at address 0.
 
 # Set the path to the RISC-V gcc toolchain for x64
-CROSS=/opt/xpack-riscv-none-elf-gcc-13.2.0-2/bin/riscv-none-elf
+if [ -x "/opt/xpack-riscv-none-embed-gcc-10.2.0-1.2/bin/riscv-none-embed-gcc" ]; then
+    CROSS=/opt/xpack-riscv-none-embed-gcc-10.2.0-1.2/bin/riscv-none-embed
+elif [ -x "/opt/xpack-riscv-none-elf-gcc-13.2.0-2/bin/riscv-none-elf-gcc" ]; then
+    CROSS=/opt/xpack-riscv-none-elf-gcc-13.2.0-2/bin/riscv-none-elf
+else
+    CROSS=riscv-none-elf
+fi
 CFLAGS="-O -mabi=ilp32 -march=rv32i -ffreestanding"
 
 $CROSS-as -mabi=ilp32 -march=rv32i -c -o start.o start.S

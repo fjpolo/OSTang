@@ -404,6 +404,9 @@ spiflash #(.ADDR(24'h500000), .LEN(FIRMWARE_SIZE)) flash (
     .reg_di(mem_wdata), .reg_do(spiflash_reg_do), .reg_wait(spiflash_reg_wait)
 );
 
+assign flash_spi_wp_n   = 1'b1;
+assign flash_spi_hold_n = 1'b1;
+
 // RV memory access
 assign rv_addr = flash_loading ? flash_addr : mem_addr;
 assign rv_wdata = flash_loading ? {flash_d, flash_d, flash_d, flash_d} : mem_wdata;
@@ -573,6 +576,9 @@ assign o_wb_odata = wb_odata;
 assign o_wb_we = wb_we;
 assign o_wb_stb = wb_stb;
 assign o_wb_cyc = wb_cyc;
+
+assign o_dbg_led[0] = ~flash_loaded;
+assign o_dbg_led[1] = ~flash_loading;
 
 // System Type
 reg [1:0] reg_sys_type;

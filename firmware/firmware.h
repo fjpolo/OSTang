@@ -17,6 +17,7 @@ void backup_process();
 
 int loadnes(int rom);
 int loadsnes(int rom);
+int loadgb(int rom);
 
 void message(char *msg, int center);
 
